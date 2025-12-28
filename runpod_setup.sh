@@ -39,21 +39,15 @@ export PATH=/workspace/go/bin:/workspace/go-projects/bin:/workspace/bin:$PATH
 # ============================================
 # 2. Install Ollama to /workspace (persistent)
 # ============================================
-if [ ! -f "/workspace/bin/ollama" ] || [ -L "/workspace/bin/ollama" ]; then
-    echo "📦 Installing Ollama to /workspace..."
-    mkdir -p /workspace/bin
-    
-    # Remove any existing symlink
-    rm -f /workspace/bin/ollama
-    
-    curl -fsSL https://ollama.com/install.sh | sh
-    # Create symlink in /workspace/bin
-    ln -sf /usr/local/bin/ollama /workspace/bin/ollama    
+if [ ! -f "/workspace/bin/ollama" ] || [ -f "/workspace/bin/ollama" ]; then
+    echo "   Moving binary to /workspace/bin..."
+    mv /usr/local/bin/ollama /workspace/bin/ollama
     chmod +x /workspace/bin/ollama
+    echo "✅ Ollama installed and moved to /workspace/bin"
 else
-    echo "✅ Ollama already exists"
+    echo "❌ Ollama installation failed - binary not found in /usr/local/bin"
+    exit 1
 fi
-
 echo "✅ Ollama verified: $(/workspace/bin/ollama --version)"
 
 # ============================================
@@ -164,31 +158,19 @@ else
     echo "✅ All packages already installed"
 fi
 # Check and reinstall Ollama if missing or broken symlink
-# Check and reinstall Ollama if missing or broken symlink
-if [ ! -f /workspace/bin/ollama ] || [ -L /workspace/bin/ollama ]; then
-    echo "⚠️  Ollama missing or broken symlink, reinstalling..."
-    mkdir -p /workspace/bin
-    
-    # Remove broken symlink
-    rm -f /workspace/bin/ollama
-    
-    # Download binary directly
-    if wget -q https://github.com/ollama/ollama/releases/latest/download/ollama-linux-amd64 -O /workspace/bin/ollama; then
-        chmod +x /workspace/bin/ollama
-        echo "✅ Ollama binary reinstalled"
-    else
-        echo "❌ Binary download failed"
-    fi
-    
-    # Verify
+if ! -f "/workspace/bin/ollama"; then
+    echo "   Moving binary to /workspace/bin..."
+    mv /usr/local/bin/ollama /workspace/bin/ollama
+    chmod +x /workspace/bin/ollama
+    echo "✅ Ollama installed and moved to /workspace/bin"
+else
     if ! /workspace/bin/ollama --version >/dev/null 2>&1; then
         echo "❌ Ollama installation failed"
     else
         echo "✅ Ollama verified: $(/workspace/bin/ollama --version)"
     fi
-else
-    echo "✅ Ollama found at /workspace/bin/ollama"
 fi
+
 # Install supervisor only if missing - with robust error handling
 if ! command -v supervisord &> /dev/null; then
     echo "📦 Installing supervisor..."
