@@ -164,6 +164,7 @@ else
     echo "✅ All packages already installed"
 fi
 # Check and reinstall Ollama if missing or broken symlink
+# Check and reinstall Ollama if missing or broken symlink
 if [ ! -f /workspace/bin/ollama ] || [ -L /workspace/bin/ollama ]; then
     echo "⚠️  Ollama missing or broken symlink, reinstalling..."
     mkdir -p /workspace/bin
@@ -171,9 +172,22 @@ if [ ! -f /workspace/bin/ollama ] || [ -L /workspace/bin/ollama ]; then
     # Remove broken symlink
     rm -f /workspace/bin/ollama
     
-    curl -fsSL https://ollama.com/install.sh | sh
-    # Create symlink in /workspace/bin
-    ln -sf /usr/local/bin/ollama /workspace/bin/ollama    
+    # Download binary directly
+    if wget -q https://github.com/ollama/ollama/releases/latest/download/ollama-linux-amd64 -O /workspace/bin/ollama; then
+        chmod +x /workspace/bin/ollama
+        echo "✅ Ollama binary reinstalled"
+    else
+        echo "❌ Binary download failed"
+    fi
+    
+    # Verify
+    if ! /workspace/bin/ollama --version >/dev/null 2>&1; then
+        echo "❌ Ollama installation failed"
+    else
+        echo "✅ Ollama verified: $(/workspace/bin/ollama --version)"
+    fi
+else
+    echo "✅ Ollama found at /workspace/bin/ollama"
 fi
 # Install supervisor only if missing - with robust error handling
 if ! command -v supervisord &> /dev/null; then
