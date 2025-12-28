@@ -9,6 +9,14 @@ echo "🚀 RunPod Complete Setup Starting..."
 echo "===================================="
 
 # ============================================
+# 0. Install system packages for initial setup
+# ============================================
+echo "📦 Installing system packages..."
+apt-get update -qq 2>/dev/null
+apt-get install -y -qq nano lsof curl wget jq git 2>/dev/null
+echo "✅ System packages installed"
+
+# ============================================
 # 1. Install Go to /workspace (persistent)
 # ============================================
 if [ ! -d "/workspace/go" ]; then
@@ -150,6 +158,10 @@ echo "✅ Supervisord configured"
 # ============================================
 cat > /workspace/startup.sh << 'EOSTARTUP'
 #!/bin/bash
+
+# Install ephemeral packages (fast, ~5 seconds)
+apt-get update -qq 2>/dev/null
+apt-get install -y -qq nano lsof curl wget jq 2>/dev/null
 
 # Export Go environment
 export GOROOT=/workspace/go
