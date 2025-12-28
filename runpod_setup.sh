@@ -104,11 +104,12 @@ files = /workspace/supervisor/conf.d/*.conf
 EOSUPERVISOR
 
 # Ollama service
+# Ollama service with GPU support
 cat > /workspace/supervisor/conf.d/ollama.conf << 'EOOLLAMACONF'
 [program:ollama]
 command=/workspace/bin/ollama serve
 directory=/workspace
-environment=OLLAMA_MODELS="/workspace/.ollama/models",OLLAMA_HOST="127.0.0.1:11434"
+environment=OLLAMA_MODELS="/workspace/.ollama/models",OLLAMA_HOST="127.0.0.1:11434",PATH="/usr/local/nvidia/bin:/usr/local/cuda/bin:%(ENV_PATH)s",LD_LIBRARY_PATH="/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64"
 autostart=true
 autorestart=true
 startretries=3
