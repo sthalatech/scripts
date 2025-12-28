@@ -39,7 +39,7 @@ export PATH=/workspace/go/bin:/workspace/go-projects/bin:/workspace/bin:$PATH
 # ============================================
 # 2. Install Ollama to /workspace (persistent)
 # ============================================
-if [ ! -f "/workspace/bin/ollama" ] || [ -f "/workspace/bin/ollama" ]; then
+if [ ! -f "/workspace/bin/ollama" ]; then
     curl -fsSL https://ollama.com/install.sh | sh
     echo "   Moving binary to /workspace/bin..."
     mv /usr/local/bin/ollama /workspace/bin/ollama
@@ -157,9 +157,9 @@ else
     echo "✅ All packages already installed"
 fi
 # Check and reinstall Ollama if missing or broken symlink
-if ! -f "/workspace/bin/ollama"; then
+if [ ! -f "/workspace/bin/ollama" ]; then
     curl -fsSL https://ollama.com/install.sh | sh
-    echo "   Moving binary to /workspace/bin..."
+    echo "Moving binary to /workspace/bin..."
     mv /usr/local/bin/ollama /workspace/bin/ollama
     chmod +x /workspace/bin/ollama
     echo "✅ Ollama installed and moved to /workspace/bin"
