@@ -51,7 +51,7 @@ source ~/.bashrc
 mkdir -p /workspace/go-projects/{bin,src,pkg} 
 echo "GO Installed"
 go version
-mkdir -p /workspace//ollama-proxy && cd /workspace/ollama-proxy
+mkdir -p /workspace/ollama-proxy && cd /workspace/ollama-proxy
 curl -o main.go https://raw.githubusercontent.com/sthalatech/scripts/refs/heads/main/main.go
 go mod init ollama-proxy && go build -o ollama-proxy
 
@@ -61,16 +61,69 @@ go mod tidy && go build -o ollama-proxy
 # Generate a secure API key
 API_KEY=$(openssl rand -base64 32 | tr -d '/+=' | head -c 32)
 echo "Generated API key: $API_KEY"
-curl -o ollama-proxy.service https://raw.githubusercontent.com/sthalatech/scripts/refs/heads/main/ollama-proxy.service
 
-# Install and start the service
-sudo cp ~/ollama-proxy/ollama-proxy.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable ollama-proxy.service
-sudo systemctl start ollama-proxy.service
+# Install supervisord
+pip install supervisor
 
-echo ""
-echo "API_KEY=$API_KEY"
+# Create config directory
+mkdir -p /workspace/supervisor/conf.d /workspace/supervisor/logs
+
+# Create supervisord config
+cat > /workspace/supervisor/supervisord.conf << 'EOF'
+[supervisord]
+nodaemon=false
+logfile=/workspace/supervisor/logs/supervisord.log
+pidfile=/workspace/supervisor/supervisord.pid
+childlogdir=/workspace/supervisor/logs
+
+[unix_http_server]
+file=/workspace/supervisor/supervisor.sock
+
+[supervisorctl]
+serverurl=unix:///workspace/supervisor/supervisor.sock
+
+[rpcinterface:supervisor]
+supervisor.rpcinterface_factory = supervisor.rpcinterface:make_main_rpcinterface
+
+[include]
+files = /workspace/supervisor/conf.d/*.conf
+EOF
+
+# Create Ollama service config
+cat > /workspace/supervisor/conf.d/ollama.conf << 'EOF'
+[program:ollama]
+command=/usr/local/bin/ollama serve
+directory=/workspace
+environment=OLLAMA_MODELS="/workspace/.ollama/models",OLLAMA_HOST="127.0.0.1:11434"
+autostart=true
+autorestart=true
+startretries=3
+stdout_logfile=/workspace/supervisor/logs/ollama.log
+stderr_logfile=/workspace/supervisor/logs/ollama_error.log
+user=root
+EOF
+
+# Create Ollama Proxy service config
+cat > /workspace/supervisor/conf.d/ollama-proxy.conf << 'EOF'
+[program:ollama-proxy]
+command=/workspace/ollama-proxy/ollama-proxy
+directory=/workspace
+environment=API_KEY="$API_KEY"
+autostart=true
+autorestart=true
+startretries=3
+stdout_logfile=/workspace/supervisor/logs/ollama-proxy.log
+stderr_logfile=/workspace/supervisor/logs/ollama-proxy-error.log
+user=root
+EOF
+
+supervisorctl reread && supervisorctl update
+
+# Control services
+supervisorctl -c /workspace/supervisor/supervisord.conf status
+# supervisorctl -c /workspace/supervisor/supervisord.conf start ollama
+# supervisorctl -c /workspace/supervisor/supervisord.conf stop ollama
+# supervisorctl -c /workspace/supervisor/supervisord.conf restart ollama
 
 # Pull recommended model
 echo "📥 Pulling Qwen2.5 32B model..."
