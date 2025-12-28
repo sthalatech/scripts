@@ -56,6 +56,22 @@ curl -o main.go https://raw.githubusercontent.com/sthalatech/scripts/refs/heads/
 go mod init ollama-proxy && go build -o ollama-proxy
 
 go mod tidy && go build -o ollama-proxy
+
+#Generate API Key
+# Generate a secure API key
+API_KEY=$(openssl rand -base64 32 | tr -d '/+=' | head -c 32)
+echo "Generated API key: $API_KEY"
+curl -o ollama-proxy.service https://raw.githubusercontent.com/sthalatech/scripts/refs/heads/main/ollama-proxy.service
+
+# Install and start the service
+sudo cp ~/ollama-proxy/ollama-proxy.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable ollama-proxy.service
+sudo systemctl start ollama-proxy.service
+
+echo ""
+echo "API_KEY=$API_KEY"
+
 # Pull recommended model
 echo "📥 Pulling Qwen2.5 32B model..."
 ollama pull qwen2.5:32b-instruct-q4_K_M
