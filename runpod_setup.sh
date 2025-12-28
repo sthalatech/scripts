@@ -16,6 +16,18 @@ apt-get update -qq 2>/dev/null
 apt-get install -y -qq nano lsof curl wget jq git 2>/dev/null
 echo "✅ System packages installed"
 
+# Install supervisor (critical)
+echo "📦 Installing supervisor..."
+if ! command -v supervisord &> /dev/null; then
+    pip3 install supervisor 2>/dev/null || pip install supervisor 2>/dev/null
+fi
+
+# Verify supervisor installed
+if ! command -v supervisord &> /dev/null; then
+    echo "❌ Failed to install supervisor"
+    echo "   Trying alternative method..."
+    apt-get install -y supervisor 2>/dev/null
+fi
 # ============================================
 # 1. Install Go to /workspace (persistent)
 # ============================================
@@ -212,7 +224,12 @@ echo "✅ .bashrc configured"
 # ============================================
 cat > /workspace/manage << 'EOMANAGE'
 #!/bin/bash
-
+if ! command -v supervisorctl &> /dev/null; then
+    echo "❌ Supervisor not installed"
+    echo "   Installing now..."
+    pip3 install supervisor 2>/dev/null || apt-get install -y supervisor
+    supervisord -c /workspace/supervisor/supervisord.conf
+fi
 case "$1" in
     status)
         echo "Services:"
