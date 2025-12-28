@@ -39,32 +39,32 @@ export PATH=/workspace/go/bin:/workspace/go-projects/bin:/workspace/bin:$PATH
 # ============================================
 # 2. Install Ollama to /workspace (persistent)
 # ============================================
-if [ ! -f "/workspace/bin/ollama" ]; then
+if [ ! -f "/workspace/bin/ollama" ] || [ -L "/workspace/bin/ollama" ]; then
     echo "📦 Installing Ollama to /workspace..."
     mkdir -p /workspace/bin
     
-    # Try direct binary download first
+    # Remove any existing symlink
+    rm -f /workspace/bin/ollama
+    
+    # Download binary directly to /workspace/bin
     if wget -q https://github.com/ollama/ollama/releases/latest/download/ollama-linux-amd64 -O /workspace/bin/ollama; then
         chmod +x /workspace/bin/ollama
-        echo "✅ Ollama binary installed"
+        echo "✅ Ollama binary installed to /workspace/bin"
     else
-        echo "⚠️  Binary download failed, using official installer..."
-        # Fallback to official installer (installs to /usr/local/bin)
-        curl -fsSL https://ollama.com/install.sh | sh
-        # Create symlink in /workspace/bin
-        ln -sf /usr/local/bin/ollama /workspace/bin/ollama
-        echo "✅ Ollama installed via official installer"
+        echo "❌ Binary download failed"
+        exit 1
     fi
 else
     echo "✅ Ollama already exists"
-    # Ensure it's executable
-    chmod +x /workspace/bin/ollama
 fi
 
 # Verify Ollama works
 if ! /workspace/bin/ollama --version >/dev/null 2>&1; then
-    echo "❌ Ollama installation failed"
-    exit 1
+    echo "❌ Ollama installation failed or not executable"
+    echo "   Trying to fix..."
+    rm -f /workspace/bin/ollama
+    wget -q https://github.com/ollama/ollama/releases/latest/download/ollama-linux-amd64 -O /workspace/bin/ollama
+    chmod +x /workspace/bin/ollama
 fi
 
 echo "✅ Ollama verified: $(/workspace/bin/ollama --version)"
@@ -176,7 +176,21 @@ if [ -n "$MISSING_PACKAGES" ]; then
 else
     echo "✅ All packages already installed"
 fi
-
+# Check and reinstall Ollama if missing or broken symlink
+if [ ! -f /workspace/bin/ollama ] || [ -L /workspace/bin/ollama ]; then
+    echo "⚠️  Ollama missing or broken symlink, reinstalling..."
+    mkdir -p /workspace/bin
+    
+    # Remove broken symlink
+    rm -f /workspace/bin/ollama
+    
+    # Download binary directly
+    if wget -q https://github.com/ollama/ollama/releases/latest/download/ollama-linux-amd64 -O /workspace/bin/ollama; then
+        chmod +x /workspace/bin/ollama
+        echo "✅ Ollama binary reinstalled"
+    else
+        echo "❌ Binary download failed"
+    fi
 # Install supervisor only if missing - with robust error handling
 if ! command -v supervisord &> /dev/null; then
     echo "📦 Installing supervisor..."
