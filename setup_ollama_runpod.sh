@@ -1,4 +1,4 @@
-#!/bin/bash
+t#!/bin/bash
 
 # RunPod Ollama Setup Script - Persistent Installation
 # Save this as: /workspace/setup_ollama.sh
@@ -61,6 +61,7 @@ go mod tidy && go build -o ollama-proxy
 # Generate a secure API key
 API_KEY=$(openssl rand -base64 32 | tr -d '/+=' | head -c 32)
 echo "Generated API key: $API_KEY"
+export API_KEY=$API_KEY
 
 # Install supervisord
 pip install supervisor
