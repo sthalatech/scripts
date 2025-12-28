@@ -38,6 +38,18 @@ pkill ollama 2>/dev/null
 nohup ollama serve > /tmp/ollama.log 2>&1 &
 
 sleep 3
+# Install Go
+cd /workspace
+wget https://go.dev/dl/go1.23.4.linux-amd64.tar.gz
+tar -xzf go1.23.4.linux-amd64.tar.gz 
+rm go1.23.4.linux-amd64.tar.gz 
+echo 'export GOROOT=/workspace/go' >> ~/.bashrc 
+echo 'export GOPATH=/workspace/go-projects' >> ~/.bashrc 
+echo 'export PATH=$GOROOT/bin:$GOPATH/bin:$PATH' >> ~/.bashrc 
+source ~/.bashrc 
+mkdir -p /workspace/go-projects/{bin,src,pkg} 
+echo "GO Installed"
+go version
 
 # Pull recommended model
 echo "📥 Pulling Qwen2.5 32B model..."
