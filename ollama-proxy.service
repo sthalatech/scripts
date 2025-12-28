@@ -1,0 +1,18 @@
+[Unit]
+Description=Ollama Auth Proxy
+After=network.target ollama.service
+Wants=ollama.service
+
+[Service]
+Type=simple
+User=exedev
+WorkingDirectory=/home/exedev/ollama-proxy
+Environment=API_KEY=$API_KEY
+Environment=PORT=8000
+Environment=OLLAMA_URL=http://localhost:11434
+ExecStart=/home/exedev/ollama-proxy/ollama-proxy
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
