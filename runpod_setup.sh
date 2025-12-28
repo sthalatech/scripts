@@ -53,15 +53,6 @@ else
     echo "✅ Ollama already exists"
 fi
 
-# Verify Ollama works
-if ! /workspace/bin/ollama --version >/dev/null 2>&1; then
-    echo "❌ Ollama installation failed or not executable"
-    echo "   Trying to fix..."
-    rm -f /workspace/bin/ollama
-    wget -q https://github.com/ollama/ollama/releases/latest/download/ollama-linux-amd64 -O /workspace/bin/ollama
-    chmod +x /workspace/bin/ollama
-fi
-
 echo "✅ Ollama verified: $(/workspace/bin/ollama --version)"
 
 # ============================================
