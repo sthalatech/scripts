@@ -49,6 +49,7 @@ if [ ! -f "/workspace/bin/ollama" ] || [ -L "/workspace/bin/ollama" ]; then
     curl -fsSL https://ollama.com/install.sh | sh
     # Create symlink in /workspace/bin
     ln -sf /usr/local/bin/ollama /workspace/bin/ollama    
+    chmod +x /workspace/bin/ollama
 else
     echo "✅ Ollama already exists"
 fi
@@ -173,7 +174,7 @@ if [ ! -f /workspace/bin/ollama ] || [ -L /workspace/bin/ollama ]; then
     curl -fsSL https://ollama.com/install.sh | sh
     # Create symlink in /workspace/bin
     ln -sf /usr/local/bin/ollama /workspace/bin/ollama    
-
+fi
 # Install supervisor only if missing - with robust error handling
 if ! command -v supervisord &> /dev/null; then
     echo "📦 Installing supervisor..."
