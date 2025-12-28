@@ -38,6 +38,7 @@ pkill ollama 2>/dev/null
 nohup ollama serve > /tmp/ollama.log 2>&1 &
 
 sleep 3
+
 # Install Go
 cd /workspace
 wget https://go.dev/dl/go1.23.4.linux-amd64.tar.gz
@@ -50,7 +51,11 @@ source ~/.bashrc
 mkdir -p /workspace/go-projects/{bin,src,pkg} 
 echo "GO Installed"
 go version
+mkdir -p /workspace//ollama-proxy && cd /workspace/ollama-proxy
+curl -o main.go https://raw.githubusercontent.com/sthalatech/scripts/refs/heads/main/main.go
+go mod init ollama-proxy && go build -o ollama-proxy
 
+go mod tidy && go build -o ollama-proxy
 # Pull recommended model
 echo "📥 Pulling Qwen2.5 32B model..."
 ollama pull qwen2.5:32b-instruct-q4_K_M
