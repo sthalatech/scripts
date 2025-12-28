@@ -69,7 +69,7 @@ mkdir -p $GOPATH/{bin,src,pkg}
 # 4. Install vLLM and dependencies (persistent)
 # ============================================
 echo "📦 Installing vLLM..."
-pip install vllm huggingface-hub
+pip install vllm huggingface-hub hf_transfer
 echo "✅ vLLM installed"
 
 # ============================================
@@ -79,7 +79,8 @@ if [ ! -d "$MODEL_PATH" ]; then
     echo "📦 Downloading model $MODEL_NAME..."
     mkdir -p $(dirname "$MODEL_PATH")
     export HF_HOME=/workspace/.cache/huggingface
-    huggingface-cli download $MODEL_NAME --local-dir "$MODEL_PATH"
+    export HF_HUB_ENABLE_HF_TRANSFER=1
+    hf download $MODEL_NAME --local-dir "$MODEL_PATH"
     echo "✅ Model downloaded to $MODEL_PATH"
 else
     echo "✅ Model exists at $MODEL_PATH"
