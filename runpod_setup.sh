@@ -151,11 +151,12 @@ user=root
 VLLMEOF
 
 # vLLM auth proxy service (0.0.0.0 - public with auth)
+# IMPORTANT: Use 127.0.0.1 (not localhost) to avoid IPv6 issues
 cat > /workspace/supervisor/conf.d/vllm-auth-proxy.conf << PROXYEOF
 [program:vllm-auth-proxy]
 command=/workspace/venv/bin/vllm-auth-proxy
 directory=/workspace
-environment=API_KEY=${API_KEY},VLLM_URL=http://localhost:11434,BIND_HOST=0.0.0.0,PORT=${VLLM_PORT}
+environment=API_KEY=${API_KEY},VLLM_URL=http://127.0.0.1:11434,BIND_HOST=0.0.0.0,PORT=${VLLM_PORT}
 autostart=true
 autorestart=true
 startretries=3
@@ -212,7 +213,6 @@ else
 fi
 STARTUPEOF
 
-# Replace VLLM_PORT placeholder
 sed -i "s/VLLM_PORT/${VLLM_PORT}/g" /workspace/startup.sh
 chmod +x /workspace/startup.sh
 
@@ -291,7 +291,7 @@ case "$1" in
         echo "Sending chat completion request..."
         curl -s -H "Authorization: Bearer $API_KEY" \
              -H "Content-Type: application/json" \
-             http://localhost:VLLM_PORT/v1/chat/completions \
+             http://127.0.0.1:VLLM_PORT/v1/chat/completions \
              -d '{
                "model": "MODEL_PATH_PLACEHOLDER",
                "messages": [{"role": "user", "content": "Hello! Respond with a short greeting."}],
@@ -299,7 +299,7 @@ case "$1" in
              }' | jq -r '.choices[0].message.content' 2>/dev/null || echo "Response received (install jq for formatting)"
         ;;
     models)
-        curl -s http://localhost:VLLM_PORT/v1/models | jq . 2>/dev/null || curl -s http://localhost:VLLM_PORT/v1/models
+        curl -s http://127.0.0.1:VLLM_PORT/v1/models | jq . 2>/dev/null || curl -s http://127.0.0.1:VLLM_PORT/v1/models
         ;;
     *)
         echo "RunPod vLLM Management"
@@ -339,7 +339,7 @@ RunPod vLLM Setup - Quick Reference
 Configuration:
 - Model: $MODEL_NAME
 - Location: $MODEL_PATH
-- vLLM Port: 11434 (localhost only - internal)
+- vLLM Port: 11434 (127.0.0.1 only - internal)
 - Proxy Port: $VLLM_PORT (0.0.0.0 - public with auth)
 
 Security:
@@ -362,7 +362,7 @@ API_KEY=\$(cat /workspace/.api_key)
 
 curl -H "Authorization: Bearer \$API_KEY" \\
      -H "Content-Type: application/json" \\
-     http://localhost:${VLLM_PORT}/v1/chat/completions \\
+     http://127.0.0.1:${VLLM_PORT}/v1/chat/completions \\
      -d '{
        "model": "$MODEL_PATH",
        "messages": [{"role": "user", "content": "Hello!"}],
@@ -415,14 +415,4 @@ echo ""
 echo "📝 Security Setup:"
 echo "   - vLLM: 127.0.0.1:11434 (internal only)"
 echo "   - Proxy: 0.0.0.0:$VLLM_PORT (public with auth)"
-echo ""
-echo "🔑 API Key: $(cat /workspace/.api_key)"
-echo ""
-echo "📊 Commands:"
-echo "   /workspace/manage status"
-echo "   /workspace/manage test"
-echo "   /workspace/manage logs vllm"
-echo ""
-echo "🌐 Expose port $VLLM_PORT in RunPod dashboard"
-echo "📖 Full guide: cat /workspace/README.txt"
 echo ""
