@@ -34,12 +34,32 @@ export PATH=/workspace/go/bin:/workspace/go-projects/bin:/workspace/bin:$PATH
 if [ ! -f "/workspace/bin/ollama" ]; then
     echo "📦 Installing Ollama to /workspace..."
     mkdir -p /workspace/bin
-    wget -q https://github.com/ollama/ollama/releases/latest/download/ollama-linux-amd64 -O /workspace/bin/ollama
-    chmod +x /workspace/bin/ollama
-    echo "✅ Ollama installed"
+    
+    # Try direct binary download first
+    if wget -q https://github.com/ollama/ollama/releases/latest/download/ollama-linux-amd64 -O /workspace/bin/ollama; then
+        chmod +x /workspace/bin/ollama
+        echo "✅ Ollama binary installed"
+    else
+        echo "⚠️  Binary download failed, using official installer..."
+        # Fallback to official installer (installs to /usr/local/bin)
+        curl -fsSL https://ollama.com/install.sh | sh
+        # Create symlink in /workspace/bin
+        ln -sf /usr/local/bin/ollama /workspace/bin/ollama
+        echo "✅ Ollama installed via official installer"
+    fi
 else
     echo "✅ Ollama already exists"
+    # Ensure it's executable
+    chmod +x /workspace/bin/ollama
 fi
+
+# Verify Ollama works
+if ! /workspace/bin/ollama --version >/dev/null 2>&1; then
+    echo "❌ Ollama installation failed"
+    exit 1
+fi
+
+echo "✅ Ollama verified: $(/workspace/bin/ollama --version)"
 
 # ============================================
 # 3. Clone scripts repo and build Go proxy
