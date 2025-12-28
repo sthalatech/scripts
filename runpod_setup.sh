@@ -54,7 +54,7 @@ else
 fi
 
 echo "🔨 Building Ollama proxy..."
-cd /workspace/scripts/ollama-auth-proxy
+cd /workspace/scripts
 /workspace/go/bin/go build -o /workspace/bin/ollama-proxy main.go
 echo "✅ Proxy built"
 
