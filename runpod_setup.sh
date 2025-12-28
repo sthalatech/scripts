@@ -16,18 +16,6 @@ apt-get update -qq 2>/dev/null
 apt-get install -y -qq nano lsof curl wget jq git 2>/dev/null
 echo "✅ System packages installed"
 
-# Install supervisor (critical)
-echo "📦 Installing supervisor..."
-if ! command -v supervisord &> /dev/null; then
-    pip3 install supervisor 2>/dev/null || pip install supervisor 2>/dev/null
-fi
-
-# Verify supervisor installed
-if ! command -v supervisord &> /dev/null; then
-    echo "❌ Failed to install supervisor"
-    echo "   Trying alternative method..."
-    apt-get install -y supervisor 2>/dev/null
-fi
 # ============================================
 # 1. Install Go to /workspace (persistent)
 # ============================================
@@ -171,9 +159,52 @@ echo "✅ Supervisord configured"
 cat > /workspace/startup.sh << 'EOSTARTUP'
 #!/bin/bash
 
-# Install ephemeral packages (fast, ~5 seconds)
-apt-get update -qq 2>/dev/null
-apt-get install -y -qq nano lsof curl wget jq 2>/dev/null
+# Install ephemeral packages only if missing
+PACKAGES="nano lsof curl wget jq"
+MISSING_PACKAGES=""
+
+for pkg in $PACKAGES; do
+    if ! command -v $pkg &> /dev/null; then
+        MISSING_PACKAGES="$MISSING_PACKAGES $pkg"
+    fi
+done
+
+if [ -n "$MISSING_PACKAGES" ]; then
+    echo "📦 Installing missing packages:$MISSING_PACKAGES"
+    apt-get update -qq 2>/dev/null
+    apt-get install -y -qq $MISSING_PACKAGES 2>/dev/null
+else
+    echo "✅ All packages already installed"
+fi
+
+# Install supervisor only if missing - with robust error handling
+if ! command -v supervisord &> /dev/null; then
+    echo "📦 Installing supervisor..."
+    
+    # Try pip3 first
+    if pip3 install supervisor 2>&1 | grep -q "Successfully installed"; then
+        echo "✅ Supervisor installed via pip3"
+    # Try pip fallback
+    elif pip install supervisor 2>&1 | grep -q "Successfully installed"; then
+        echo "✅ Supervisor installed via pip"
+    # Try apt as last resort
+    elif apt-get install -y supervisor 2>&1 | grep -q "Setting up"; then
+        echo "✅ Supervisor installed via apt"
+    else
+        echo "❌ Failed to install supervisor via all methods"
+        echo "   Trying one more time with verbose output..."
+        pip3 install supervisor || apt-get install -y supervisor
+    fi
+    
+    # Final verification
+    if ! command -v supervisord &> /dev/null; then
+        echo "❌ Supervisor installation failed completely"
+        echo "   Please run manually: pip3 install supervisor"
+        exit 1
+    fi
+else
+    echo "✅ Supervisor already installed"
+fi
 
 # Export Go environment
 export GOROOT=/workspace/go
@@ -182,11 +213,23 @@ export PATH=/workspace/go/bin:/workspace/go-projects/bin:/workspace/bin:$PATH
 
 # Start supervisord if not running
 if ! pgrep supervisord > /dev/null; then
-    # Install supervisor via pip (ephemeral, but fast ~2 seconds)
-    pip install supervisor -q 2>/dev/null
+    echo "🚀 Starting supervisord..."
+    supervisord -c /workspace/supervisor/supervisord.conf 2>&1 | tee /tmp/supervisord-start.log
     
-    supervisord -c /workspace/supervisor/supervisord.conf 2>/dev/null
+    if [ ${PIPESTATUS[0]} -ne 0 ]; then
+        echo "❌ Supervisord failed to start"
+        echo "   Check logs: cat /tmp/supervisord-start.log"
+        exit 1
+    fi
+    
     sleep 2
+    
+    # Verify it actually started
+    if ! pgrep supervisord > /dev/null; then
+        echo "❌ Supervisord process not found after start"
+        echo "   Check logs: tail /workspace/supervisor/logs/supervisord.log"
+        exit 1
+    fi
     
     echo "=================================="
     echo "✅ Services Started"
@@ -202,6 +245,8 @@ if ! pgrep supervisord > /dev/null; then
     echo "   /workspace/manage logs ollama"
     echo "   /workspace/manage apikey"
     echo ""
+else
+    echo "✅ Supervisor already running"
 fi
 EOSTARTUP
 
@@ -224,14 +269,38 @@ echo "✅ .bashrc configured"
 # ============================================
 cat > /workspace/manage << 'EOMANAGE'
 #!/bin/bash
-if ! command -v supervisorctl &> /dev/null; then
-    echo "❌ Supervisor not installed"
-    echo "   Installing now..."
-    pip3 install supervisor 2>/dev/null || apt-get install -y supervisor
-    supervisord -c /workspace/supervisor/supervisord.conf
-fi
+
+# Check if supervisor is installed, install if missing
+ensure_supervisor() {
+    if ! command -v supervisorctl &> /dev/null; then
+        echo "❌ Supervisor not installed"
+        echo "   Installing now..."
+        
+        if pip3 install supervisor 2>&1 | grep -q "Successfully installed"; then
+            echo "✅ Supervisor installed"
+        elif pip install supervisor 2>&1 | grep -q "Successfully installed"; then
+            echo "✅ Supervisor installed"
+        elif apt-get install -y supervisor 2>&1 | grep -q "Setting up"; then
+            echo "✅ Supervisor installed"
+        else
+            echo "❌ Failed to install supervisor"
+            echo "   Run manually: pip3 install supervisor"
+            return 1
+        fi
+    fi
+    
+    # Check if supervisord is running
+    if ! pgrep supervisord > /dev/null; then
+        echo "⚠️  Supervisord not running"
+        echo "   Starting now..."
+        supervisord -c /workspace/supervisor/supervisord.conf
+        sleep 2
+    fi
+}
+
 case "$1" in
     status)
+        ensure_supervisor || exit 1
         echo "Services:"
         supervisorctl -c /workspace/supervisor/supervisord.conf status
         echo ""
@@ -239,9 +308,11 @@ case "$1" in
         /workspace/go/bin/go version 2>/dev/null || echo "  Go not in PATH (run: source /workspace/startup.sh)"
         ;;
     restart)
+        ensure_supervisor || exit 1
         supervisorctl -c /workspace/supervisor/supervisord.conf restart all
         ;;
     stop)
+        ensure_supervisor || exit 1
         supervisorctl -c /workspace/supervisor/supervisord.conf stop all
         ;;
     start)
@@ -259,6 +330,7 @@ case "$1" in
         fi
         ;;
     shell)
+        ensure_supervisor || exit 1
         supervisorctl -c /workspace/supervisor/supervisord.conf
         ;;
     apikey)
