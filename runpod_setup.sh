@@ -1,89 +1,122 @@
 #!/bin/bash
-# RunPod Complete Setup Script
-# Save as: /workspace/setup.sh
-# Run once on new pod, then restart - everything works automatically
+# RunPod vLLM Setup Script
+# https://github.com/sthalatech/scripts/runpod_setup.sh
 
 set -e
 
-echo "🚀 RunPod Complete Setup Starting..."
+# ============================================
+# CONFIGURATION PARAMETERS
+# ============================================
+MODEL_NAME="Qwen/Qwen2.5-7B-Instruct"
+MODEL_PATH="/workspace/models/Qwen2.5-7B-Instruct"
+VLLM_PORT=8000
+GO_VERSION="1.23.4"
+
+echo "🚀 RunPod vLLM Setup Starting..."
+echo "   Model: $MODEL_NAME"
+echo "   Port: $VLLM_PORT"
 echo "===================================="
 
 # ============================================
-# 0. Install system packages for initial setup
+# 0. Install system packages
 # ============================================
 echo "📦 Installing system packages..."
 apt-get update -qq 2>/dev/null
-apt-get install -y -qq nano lsof curl wget jq git 2>/dev/null
+apt-get install -y -qq nano lsof curl wget jq git python3-venv build-essential 2>/dev/null
 echo "✅ System packages installed"
 
 # ============================================
-# 1. Install Go to /workspace (persistent)
+# 1. Create Python virtual environment (persistent)
 # ============================================
-if [ ! -d "/workspace/go" ]; then
-    echo "📦 Installing Go to /workspace..."
-    cd /workspace
-    wget -q https://go.dev/dl/go1.23.4.linux-amd64.tar.gz
-    tar -xzf go1.23.4.linux-amd64.tar.gz
-    rm go1.23.4.linux-amd64.tar.gz
-    mkdir -p /workspace/go-projects/{bin,src,pkg}
+if [ ! -d "/workspace/venv" ]; then
+    echo "📦 Creating Python virtual environment..."
+    python3 -m venv /workspace/venv
+    source /workspace/venv/bin/activate
+    pip install --upgrade pip
+    echo "✅ Virtual environment created"
+else
+    echo "✅ Virtual environment exists"
+    source /workspace/venv/bin/activate
+fi
+
+# ============================================
+# 2. Install supervisor in venv (persistent)
+# ============================================
+echo "📦 Installing supervisor..."
+pip install supervisor
+echo "✅ Supervisor installed"
+
+# ============================================
+# 3. Install Go in venv (persistent)
+# ============================================
+if [ ! -d "/workspace/venv/go" ]; then
+    echo "📦 Installing Go $GO_VERSION..."
+    cd /workspace/venv
+    wget -q https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz
+    tar -xzf go${GO_VERSION}.linux-amd64.tar.gz
+    rm go${GO_VERSION}.linux-amd64.tar.gz
     echo "✅ Go installed"
 else
-    echo "✅ Go already exists"
+    echo "✅ Go exists"
 fi
 
-# Set Go environment for this script
-export GOROOT=/workspace/go
-export GOPATH=/workspace/go-projects
-export PATH=/workspace/go/bin:/workspace/go-projects/bin:/workspace/bin:$PATH
+export GOROOT=/workspace/venv/go
+export GOPATH=/workspace/venv/go-projects
+export PATH=$GOROOT/bin:$GOPATH/bin:$PATH
+mkdir -p $GOPATH/{bin,src,pkg}
 
 # ============================================
-# 2. Install Ollama to /workspace (persistent)
+# 4. Install vLLM and dependencies (persistent)
 # ============================================
-if [ ! -f "/workspace/bin/ollama" ]; then
-    curl -fsSL https://ollama.com/install.sh | sh
-    echo "   Moving binary to /workspace/bin..."
-    mv /usr/local/bin/ollama /workspace/bin/ollama
-    chmod +x /workspace/bin/ollama
-    echo "✅ Ollama installed and moved to /workspace/bin"
+echo "📦 Installing vLLM..."
+pip install vllm huggingface-hub
+echo "✅ vLLM installed"
+
+# ============================================
+# 5. Download model (persistent)
+# ============================================
+if [ ! -d "$MODEL_PATH" ]; then
+    echo "📦 Downloading model $MODEL_NAME..."
+    mkdir -p $(dirname "$MODEL_PATH")
+    export HF_HOME=/workspace/.cache/huggingface
+    huggingface-cli download $MODEL_NAME --local-dir "$MODEL_PATH"
+    echo "✅ Model downloaded to $MODEL_PATH"
 else
-    echo "✅ Ollama exists"
+    echo "✅ Model exists at $MODEL_PATH"
 fi
 
 # ============================================
-# 3. Clone scripts repo and build Go proxy
+# 6. Build Go proxy (vLLM API authentication)
 # ============================================
-echo "📦 Cloning scripts repository..."
+echo "📦 Setting up vLLM auth proxy..."
 if [ -d "/workspace/scripts" ]; then
-    cd /workspace/scripts
-    git pull -q
+    cd /workspace/scripts && git pull -q
 else
-    cd /workspace
-    git clone -q https://github.com/sthalatech/scripts.git
+    cd /workspace && git clone -q https://github.com/sthalatech/scripts.git
 fi
 
-echo "🔨 Building Ollama proxy..."
 cd /workspace/scripts
-/workspace/go/bin/go build -o /workspace/bin/ollama-proxy main.go
-echo "✅ Proxy built"
+$GOROOT/bin/go build -o /workspace/venv/bin/vllm-auth-proxy vllm-auth-proxy.go
+echo "✅ Auth proxy built"
 
-# Generate API key if not exists
+# Generate API key
 if [ ! -f "/workspace/.api_key" ]; then
     API_KEY=$(openssl rand -hex 32)
     echo "$API_KEY" > /workspace/.api_key
     chmod 600 /workspace/.api_key
-    echo "✅ Generated new API key: $API_KEY"
+    echo "✅ API key generated: $API_KEY"
 else
     API_KEY=$(cat /workspace/.api_key)
-    echo "✅ Using existing API key: ${API_KEY:0:16}..."
+    echo "✅ API key exists: ${API_KEY:0:16}..."
 fi
 
 # ============================================
-# 4. Create Supervisord config (persistent)
+# 7. Supervisord configuration
 # ============================================
-echo "📦 Setting up Supervisord..."
+echo "📦 Configuring supervisord..."
 mkdir -p /workspace/supervisor/{conf.d,logs}
 
-cat > /workspace/supervisor/supervisord.conf << 'EOSUPERVISOR'
+cat > /workspace/supervisor/supervisord.conf << 'EOF'
 [supervisord]
 nodaemon=false
 logfile=/workspace/supervisor/logs/supervisord.log
@@ -101,193 +134,113 @@ supervisor.rpcinterface_factory = supervisor.rpcinterface:make_main_rpcinterface
 
 [include]
 files = /workspace/supervisor/conf.d/*.conf
-EOSUPERVISOR
+EOF
 
-# Ollama service
-# Ollama service with GPU support
-cat > /workspace/supervisor/conf.d/ollama.conf << 'EOOLLAMACONF'
-[program:ollama]
-command=/workspace/bin/ollama serve
+# vLLM service (localhost only - internal)
+cat > /workspace/supervisor/conf.d/vllm.conf << VLLMEOF
+[program:vllm]
+command=/workspace/venv/bin/vllm serve $MODEL_PATH --host 127.0.0.1 --port 11434 --dtype auto
 directory=/workspace
-environment=OLLAMA_MODELS="/workspace/.ollama/models",OLLAMA_HOST="127.0.0.1:11434",PATH="/usr/local/nvidia/bin:/usr/local/cuda/bin:%(ENV_PATH)s",LD_LIBRARY_PATH="/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64"
+environment=HF_HOME="/workspace/.cache/huggingface",CUDA_VISIBLE_DEVICES="0"
 autostart=true
 autorestart=true
 startretries=3
-stdout_logfile=/workspace/supervisor/logs/ollama.log
-stderr_logfile=/workspace/supervisor/logs/ollama-error.log
+stdout_logfile=/workspace/supervisor/logs/vllm.log
+stderr_logfile=/workspace/supervisor/logs/vllm-error.log
 user=root
-EOOLLAMACONF
+VLLMEOF
 
-# Ollama proxy service
-cat > /workspace/supervisor/conf.d/ollama-proxy.conf << EOPROXYCONF
-[program:ollama-proxy]
-command=/workspace/bin/ollama-proxy
+# vLLM auth proxy service (0.0.0.0 - public with auth)
+cat > /workspace/supervisor/conf.d/vllm-auth-proxy.conf << PROXYEOF
+[program:vllm-auth-proxy]
+command=/workspace/venv/bin/vllm-auth-proxy
 directory=/workspace
-environment=API_KEY=${API_KEY},OLLAMA_URL=http://localhost:11434,PORT=8000
+environment=API_KEY=${API_KEY},VLLM_URL=http://localhost:11434,BIND_HOST=0.0.0.0,PORT=${VLLM_PORT}
 autostart=true
 autorestart=true
 startretries=3
-stdout_logfile=/workspace/supervisor/logs/ollama-proxy.log
-stderr_logfile=/workspace/supervisor/logs/ollama-proxy-error.log
+stdout_logfile=/workspace/supervisor/logs/vllm-auth-proxy.log
+stderr_logfile=/workspace/supervisor/logs/vllm-auth-proxy-error.log
 user=root
-EOPROXYCONF
+PROXYEOF
 
 echo "✅ Supervisord configured"
 
 # ============================================
-# 5. Create startup script (persistent)
+# 8. Startup script (auto-runs on pod restart)
 # ============================================
-cat > /workspace/startup.sh << 'EOSTARTUP'
+cat > /workspace/startup.sh << 'STARTUPEOF'
 #!/bin/bash
 
-# Install ephemeral packages only if missing
+# Install missing packages
 PACKAGES="nano lsof curl wget jq"
-MISSING_PACKAGES=""
-
+MISSING=""
 for pkg in $PACKAGES; do
-    if ! command -v $pkg &> /dev/null; then
-        MISSING_PACKAGES="$MISSING_PACKAGES $pkg"
-    fi
+    command -v $pkg &>/dev/null || MISSING="$MISSING $pkg"
 done
+[ -n "$MISSING" ] && apt-get update -qq && apt-get install -y -qq $MISSING
 
-if [ -n "$MISSING_PACKAGES" ]; then
-    echo "📦 Installing missing packages:$MISSING_PACKAGES"
-    apt-get update -qq 2>/dev/null
-    apt-get install -y -qq $MISSING_PACKAGES 2>/dev/null
+# Activate virtual environment
+if [ -f /workspace/venv/bin/activate ]; then
+    source /workspace/venv/bin/activate
+    export GOROOT=/workspace/venv/go
+    export GOPATH=/workspace/venv/go-projects
+    export PATH=$GOROOT/bin:$GOPATH/bin:/workspace/venv/bin:$PATH
 else
-    echo "✅ All packages already installed"
-fi
-# Check and reinstall Ollama if missing or broken symlink
-if [ ! -f "/workspace/bin/ollama" ]; then
-    curl -fsSL https://ollama.com/install.sh | sh
-    echo "Moving binary to /workspace/bin..."
-    mv /usr/local/bin/ollama /workspace/bin/ollama
-    chmod +x /workspace/bin/ollama
-    echo "✅ Ollama installed and moved to /workspace/bin"
-else
-    if ! /workspace/bin/ollama --version >/dev/null 2>&1; then
-        echo "❌ Ollama installation failed"
-    else
-        echo "✅ Ollama verified: $(/workspace/bin/ollama --version)"
-    fi
+    echo "❌ Virtual environment not found"
+    exit 1
 fi
 
-# Install supervisor only if missing - with robust error handling
-if ! command -v supervisord &> /dev/null; then
-    echo "📦 Installing supervisor..."
-    
-    # Try pip3 first
-    if pip3 install supervisor 2>&1 | grep -q "Successfully installed"; then
-        echo "✅ Supervisor installed via pip3"
-    # Try pip fallback
-    elif pip install supervisor 2>&1 | grep -q "Successfully installed"; then
-        echo "✅ Supervisor installed via pip"
-    # Try apt as last resort
-    elif apt-get install -y supervisor 2>&1 | grep -q "Setting up"; then
-        echo "✅ Supervisor installed via apt"
-    else
-        echo "❌ Failed to install supervisor via all methods"
-        echo "   Trying one more time with verbose output..."
-        pip3 install supervisor || apt-get install -y supervisor
-    fi
-    
-    # Final verification
-    if ! command -v supervisord &> /dev/null; then
-        echo "❌ Supervisor installation failed completely"
-        echo "   Please run manually: pip3 install supervisor"
-        exit 1
-    fi
-else
-    echo "✅ Supervisor already installed"
-fi
-
-# Export Go environment
-export GOROOT=/workspace/go
-export GOPATH=/workspace/go-projects
-export PATH=/workspace/go/bin:/workspace/go-projects/bin:/workspace/bin:$PATH
-
-# Start supervisord if not running
-if ! pgrep supervisord > /dev/null; then
-    echo "🚀 Starting supervisord..."
-    supervisord -c /workspace/supervisor/supervisord.conf 2>&1 | tee /tmp/supervisord-start.log
-    
-    if [ ${PIPESTATUS[0]} -ne 0 ]; then
-        echo "❌ Supervisord failed to start"
-        echo "   Check logs: cat /tmp/supervisord-start.log"
-        exit 1
-    fi
-    
-    sleep 2
-    
-    # Verify it actually started
-    if ! pgrep supervisord > /dev/null; then
-        echo "❌ Supervisord process not found after start"
-        echo "   Check logs: tail /workspace/supervisor/logs/supervisord.log"
-        exit 1
-    fi
-    
-    echo "=================================="
-    echo "✅ Services Started"
-    echo "=================================="
+# Start supervisord
+if ! pgrep supervisord >/dev/null; then
+    echo "🚀 Starting vLLM services..."
+    supervisord -c /workspace/supervisor/supervisord.conf
+    sleep 3
     supervisorctl -c /workspace/supervisor/supervisord.conf status
     echo ""
-    echo "🔑 API Key: $(cat /workspace/.api_key 2>/dev/null || echo 'Not set')"
-    echo "🌐 Expose port 8000 in RunPod dashboard"
-    echo "🌐 Access: https://YOUR-POD-ID-8000.proxy.runpod.net"
-    echo ""
-    echo "📊 Management:"
-    echo "   /workspace/manage status"
-    echo "   /workspace/manage logs ollama"
-    echo "   /workspace/manage apikey"
+    echo "=================================="
+    echo "✅ vLLM Services Running"
+    echo "=================================="
+    echo "🔑 API Key: $(cat /workspace/.api_key 2>/dev/null)"
+    echo "🔒 vLLM: http://127.0.0.1:11434 (internal only)"
+    echo "🌐 Proxy: http://0.0.0.0:VLLM_PORT (public with auth)"
+    echo "📊 Management: /workspace/manage status"
+    echo "🧪 Test: /workspace/manage test"
     echo ""
 else
     echo "✅ Supervisor already running"
 fi
-EOSTARTUP
+STARTUPEOF
 
+# Replace VLLM_PORT placeholder
+sed -i "s/VLLM_PORT/${VLLM_PORT}/g" /workspace/startup.sh
 chmod +x /workspace/startup.sh
 
 # ============================================
-# 6. Configure .bashrc (auto-run startup)
+# 9. Auto-start configuration
 # ============================================
-cat > ~/.bashrc << 'EOBASHRC'
-# Run startup script (Go paths + supervisor)
+cat > ~/.bashrc << 'EOF'
+# Auto-start vLLM on login
 if [ -f /workspace/startup.sh ]; then
     source /workspace/startup.sh
 fi
-EOBASHRC
+EOF
 
-echo "✅ .bashrc configured"
+echo "✅ Auto-start configured"
 
 # ============================================
-# 7. Create management helper script
+# 10. Management helper script
 # ============================================
-cat > /workspace/manage << 'EOMANAGE'
+cat > /workspace/manage << 'MANAGEEOF'
 #!/bin/bash
 
-# Check if supervisor is installed, install if missing
+# Activate venv
+source /workspace/venv/bin/activate 2>/dev/null
+
+# Ensure supervisor is running
 ensure_supervisor() {
-    if ! command -v supervisorctl &> /dev/null; then
-        echo "❌ Supervisor not installed"
-        echo "   Installing now..."
-        
-        if pip3 install supervisor 2>&1 | grep -q "Successfully installed"; then
-            echo "✅ Supervisor installed"
-        elif pip install supervisor 2>&1 | grep -q "Successfully installed"; then
-            echo "✅ Supervisor installed"
-        elif apt-get install -y supervisor 2>&1 | grep -q "Setting up"; then
-            echo "✅ Supervisor installed"
-        else
-            echo "❌ Failed to install supervisor"
-            echo "   Run manually: pip3 install supervisor"
-            return 1
-        fi
-    fi
-    
-    # Check if supervisord is running
-    if ! pgrep supervisord > /dev/null; then
-        echo "⚠️  Supervisord not running"
-        echo "   Starting now..."
+    if ! pgrep supervisord >/dev/null; then
+        echo "⚠️  Starting supervisord..."
         supervisord -c /workspace/supervisor/supervisord.conf
         sleep 2
     fi
@@ -295,156 +248,163 @@ ensure_supervisor() {
 
 case "$1" in
     status)
-        ensure_supervisor || exit 1
+        ensure_supervisor
         echo "Services:"
         supervisorctl -c /workspace/supervisor/supervisord.conf status
         echo ""
-        echo "Go:"
-        /workspace/go/bin/go version 2>/dev/null || echo "  Go not in PATH (run: source /workspace/startup.sh)"
+        echo "GPU:"
+        nvidia-smi --query-gpu=name,memory.used,memory.total,utilization.gpu --format=csv,noheader 2>/dev/null || echo "  nvidia-smi unavailable"
         ;;
     restart)
-        ensure_supervisor || exit 1
+        ensure_supervisor
         supervisorctl -c /workspace/supervisor/supervisord.conf restart all
         ;;
     stop)
-        ensure_supervisor || exit 1
+        ensure_supervisor
         supervisorctl -c /workspace/supervisor/supervisord.conf stop all
         ;;
     start)
         /workspace/startup.sh
         ;;
     logs)
-        if [ -z "$2" ]; then
-            echo "Available logs:"
-            ls /workspace/supervisor/logs/*.log 2>/dev/null | xargs -n1 basename
-            echo ""
-            echo "Usage: /workspace/manage logs [service-name]"
-            echo "Example: /workspace/manage logs ollama"
-        else
-            tail -f /workspace/supervisor/logs/${2}.log
+        SERVICE=${2:-vllm}
+        if [ "$SERVICE" = "proxy" ]; then
+            SERVICE="vllm-auth-proxy"
         fi
+        tail -f /workspace/supervisor/logs/${SERVICE}.log
         ;;
     shell)
-        ensure_supervisor || exit 1
+        ensure_supervisor
         supervisorctl -c /workspace/supervisor/supervisord.conf
         ;;
     apikey)
-        if [ -f /workspace/.api_key ]; then
-            echo "API Key: $(cat /workspace/.api_key)"
-        else
-            echo "No API key found"
-        fi
+        cat /workspace/.api_key 2>/dev/null || echo "API key not found"
         ;;
     test)
-        echo "Testing Ollama proxy..."
+        echo "Testing vLLM API..."
         API_KEY=$(cat /workspace/.api_key 2>/dev/null)
         if [ -z "$API_KEY" ]; then
-            echo "❌ No API key found"
+            echo "❌ API key not found"
             exit 1
         fi
+        
+        echo "Sending chat completion request..."
         curl -s -H "Authorization: Bearer $API_KEY" \
-             http://localhost:8000/api/tags | head -20
+             -H "Content-Type: application/json" \
+             http://localhost:VLLM_PORT/v1/chat/completions \
+             -d '{
+               "model": "MODEL_PATH_PLACEHOLDER",
+               "messages": [{"role": "user", "content": "Hello! Respond with a short greeting."}],
+               "max_tokens": 50
+             }' | jq -r '.choices[0].message.content' 2>/dev/null || echo "Response received (install jq for formatting)"
         ;;
-    pull)
-        if [ -z "$2" ]; then
-            echo "Usage: /workspace/manage pull [model-name]"
-            echo "Example: /workspace/manage pull qwen2.5:32b-instruct-q4_K_M"
-        else
-            /workspace/bin/ollama pull "$2"
-        fi
+    models)
+        curl -s http://localhost:VLLM_PORT/v1/models | jq . 2>/dev/null || curl -s http://localhost:VLLM_PORT/v1/models
         ;;
     *)
-        echo "RunPod Management Commands"
+        echo "RunPod vLLM Management"
         echo ""
         echo "Usage: /workspace/manage [command]"
         echo ""
         echo "Commands:"
-        echo "  status   - Show service status"
-        echo "  start    - Start all services"
-        echo "  stop     - Stop all services"
-        echo "  restart  - Restart all services"
-        echo "  logs     - View logs (e.g., logs ollama)"
-        echo "  shell    - Open supervisorctl shell"
-        echo "  apikey   - Show API key"
-        echo "  test     - Test Ollama proxy"
-        echo "  pull     - Pull Ollama model (e.g., pull qwen2.5:32b)"
+        echo "  status          - Show service status and GPU usage"
+        echo "  start           - Start all services"
+        echo "  stop            - Stop all services"
+        echo "  restart         - Restart all services"
+        echo "  logs [service]  - View logs (vllm, proxy)"
+        echo "  shell           - Open supervisorctl shell"
+        echo "  apikey          - Show API key"
+        echo "  test            - Test vLLM API"
+        echo "  models          - List available models"
         echo ""
         echo "Examples:"
         echo "  /workspace/manage status"
-        echo "  /workspace/manage logs ollama-proxy"
-        echo "  /workspace/manage pull qwen2.5:32b-instruct-q4_K_M"
-        echo ""
+        echo "  /workspace/manage logs vllm"
+        echo "  /workspace/manage test"
         ;;
 esac
-EOMANAGE
+MANAGEEOF
 
+sed -i "s/VLLM_PORT/${VLLM_PORT}/g" /workspace/manage
+sed -i "s|MODEL_PATH_PLACEHOLDER|${MODEL_PATH}|g" /workspace/manage
 chmod +x /workspace/manage
 
 # ============================================
-# 8. Create quick reference guide
+# 11. README
 # ============================================
-cat > /workspace/README.txt << 'EOREADME'
-RunPod Ollama Setup - Quick Reference
-======================================
+cat > /workspace/README.txt << READMEEOF
+RunPod vLLM Setup - Quick Reference
+====================================
 
-Services Running:
-- Ollama: http://localhost:11434
-- Ollama Proxy (with auth): http://localhost:8000
+Configuration:
+- Model: $MODEL_NAME
+- Location: $MODEL_PATH
+- vLLM Port: 11434 (localhost only - internal)
+- Proxy Port: $VLLM_PORT (0.0.0.0 - public with auth)
+
+Security:
+- vLLM runs on 127.0.0.1 (not exposed)
+- Only authenticated proxy is publicly accessible
+- All requests must include API key
 
 Management:
 -----------
-/workspace/manage status       # Check services
-/workspace/manage logs ollama  # View logs
+/workspace/manage status       # Check services & GPU
+/workspace/manage logs vllm    # View vLLM logs
+/workspace/manage logs proxy   # View proxy logs
 /workspace/manage apikey       # Show API key
-/workspace/manage test         # Test proxy
-/workspace/manage pull MODEL   # Download model
+/workspace/manage test         # Test API
+/workspace/manage models       # List models
 
-Pull Model:
------------
-/workspace/manage pull qwen2.5:32b-instruct-q4_K_M
-
-Test API:
----------
-API_KEY=$(cat /workspace/.api_key)
-curl -H "Authorization: Bearer $API_KEY" \
-     http://localhost:8000/api/tags
-
-Expose Port:
-------------
-1. RunPod Dashboard → Your Pod → Edit
-2. Add port: 8000
-3. Access: https://YOUR-POD-ID-8000.proxy.runpod.net
-
-External API Test:
+API Usage (Local):
 ------------------
-curl -H "Authorization: Bearer $API_KEY" \
-     https://YOUR-POD-ID-8000.proxy.runpod.net/api/generate \
-     -d '{"model":"qwen2.5:32b-instruct-q4_K_M","prompt":"Hello","stream":false}'
+API_KEY=\$(cat /workspace/.api_key)
 
-Logs Location:
---------------
-/workspace/supervisor/logs/ollama.log
-/workspace/supervisor/logs/ollama-proxy.log
+curl -H "Authorization: Bearer \$API_KEY" \\
+     -H "Content-Type: application/json" \\
+     http://localhost:${VLLM_PORT}/v1/chat/completions \\
+     -d '{
+       "model": "$MODEL_PATH",
+       "messages": [{"role": "user", "content": "Hello!"}],
+       "max_tokens": 100
+     }'
 
-Auto-start:
------------
-Everything starts automatically on pod restart via .bashrc
+Expose Port in RunPod:
+----------------------
+1. RunPod Dashboard → Your Pod → Edit
+2. Add port: ${VLLM_PORT}
+3. Access: https://YOUR-POD-ID-${VLLM_PORT}.proxy.runpod.net
+
+External API Usage:
+-------------------
+curl -H "Authorization: Bearer \$API_KEY" \\
+     -H "Content-Type: application/json" \\
+     https://YOUR-POD-ID-${VLLM_PORT}.proxy.runpod.net/v1/chat/completions \\
+     -d '{
+       "model": "$MODEL_PATH",
+       "messages": [{"role": "user", "content": "Hello!"}]
+     }'
 
 Files:
 ------
-/workspace/bin/ollama          - Ollama binary
-/workspace/bin/ollama-proxy    - Auth proxy
-/workspace/go                  - Go installation
-/workspace/.api_key            - API key (keep secret!)
-/workspace/startup.sh          - Startup script
-/workspace/manage              - Management script
-EOREADME
+/workspace/venv                     - Python + Go environment
+/workspace/models                   - Downloaded models
+/workspace/venv/bin/vllm-auth-proxy - Authentication proxy
+/workspace/.api_key                 - API key (keep secret!)
+/workspace/supervisor               - Service configs
+/workspace/startup.sh               - Auto-start script
+/workspace/manage                   - Management CLI
+
+Auto-start:
+-----------
+Services start automatically on pod restart via .bashrc
+READMEEOF
 
 # ============================================
-# 9. Test startup now
+# 12. Start services now
 # ============================================
 echo ""
-echo "🧪 Testing startup..."
+echo "🧪 Starting services..."
 source /workspace/startup.sh
 
 echo ""
@@ -452,30 +412,17 @@ echo "===================================="
 echo "✅ Setup Complete!"
 echo "===================================="
 echo ""
-echo "📝 What was installed:"
-echo "   - Go: /workspace/go"
-echo "   - Ollama: /workspace/bin/ollama"
-echo "   - Ollama Proxy: /workspace/bin/ollama-proxy"
-echo "   - Scripts: /workspace/scripts"
-echo "   - Supervisor: /workspace/supervisor"
+echo "📝 Security Setup:"
+echo "   - vLLM: 127.0.0.1:11434 (internal only)"
+echo "   - Proxy: 0.0.0.0:$VLLM_PORT (public with auth)"
 echo ""
-echo "🔑 Your API Key:"
-echo "   $(cat /workspace/.api_key)"
+echo "🔑 API Key: $(cat /workspace/.api_key)"
 echo ""
-echo "🔄 On every pod restart:"
-echo "   - Services auto-start via .bashrc"
-echo "   - Everything just works!"
-echo ""
-echo "📊 Quick commands:"
+echo "📊 Commands:"
 echo "   /workspace/manage status"
-echo "   /workspace/manage logs ollama"
-echo "   /workspace/manage pull qwen2.5:32b-instruct-q4_K_M"
 echo "   /workspace/manage test"
+echo "   /workspace/manage logs vllm"
 echo ""
-echo "🌐 Next steps:"
-echo "   1. Expose port 8000 in RunPod dashboard"
-echo "   2. Pull a model: /workspace/manage pull qwen2.5:32b-instruct-q4_K_M"
-echo "   3. Test: /workspace/manage test"
-echo ""
-echo "📖 See /workspace/README.txt for full guide"
+echo "🌐 Expose port $VLLM_PORT in RunPod dashboard"
+echo "📖 Full guide: cat /workspace/README.txt"
 echo ""
