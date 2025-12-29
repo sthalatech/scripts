@@ -7,10 +7,10 @@ set -e
 # ============================================
 # CONFIGURATION PARAMETERS
 # ============================================
-MODEL_NAME="Qwen/Qwen2.5-7B-Instruct"
-MODEL_PATH="/workspace/models/Qwen2.5-7B-Instruct"
-VLLM_PORT=8000
-GO_VERSION="1.23.4"
+export MODEL_NAME="Qwen/Qwen2.5-7B-Instruct"
+export MODEL_PATH="/workspace/models/Qwen2.5-7B-Instruct"
+export VLLM_PORT=8000
+export GO_VERSION="1.23.4"
 
 echo "🚀 RunPod vLLM Setup Starting..."
 echo "   Model: $MODEL_NAME"
