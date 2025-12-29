@@ -22,7 +22,7 @@ echo "===================================="
 # ============================================
 echo "📦 Installing system packages..."
 apt-get update -qq 2>/dev/null
-apt-get install -y -qq nano lsof curl wget jq git python3-venv build-essential 2>/dev/null
+apt-get install -y -qq nano lsof curl wget jq git python3-venv build-essential pip 2>/dev/null
 echo "✅ System packages installed"
 
 # ============================================
