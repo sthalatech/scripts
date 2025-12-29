@@ -22,7 +22,7 @@ echo "===================================="
 # ============================================
 echo "📦 Installing system packages..."
 apt-get update -qq 2>/dev/null
-apt-get install -y -qq nano lsof curl wget jq git python3-venv build-essential pip 2>/dev/null
+apt-get install -y -qq nano lsof curl wget jq git python3-venv build-essential pip supervisor 2>/dev/null
 echo "✅ System packages installed"
 
 # ============================================
@@ -42,9 +42,9 @@ fi
 # ============================================
 # 2. Install supervisor in venv (persistent)
 # ============================================
-echo "📦 Installing supervisor..."
-pip install supervisor
-echo "✅ Supervisor installed"
+# echo "📦 Installing supervisor..."
+# pip install supervisor
+# echo "✅ Supervisor installed"
 
 # ============================================
 # 3. Install Go in venv (persistent)
