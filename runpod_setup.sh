@@ -8,8 +8,8 @@ set -e
 # CONFIGURATION PARAMETERS
 # ============================================
 #Changed models
-export MODEL_NAME="google/gemma-2-9b-it"
-export MODEL_PATH="/workspace/models/gemma-2-9b-it"
+export MODEL_NAME="google/gemma-3-12b-it"
+export MODEL_PATH="/workspace/models/gemma-3-12b-it"
 export VLLM_PORT=8000
 export GO_VERSION="1.23.4"
 
