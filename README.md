@@ -6,12 +6,12 @@ Complete automated setup for running Ollama with authentication on RunPod GPU po
 
 Run this single command on your new RunPod pod:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/sthalatech/scripts/main/runpod_setup.sh | bash
+curl -fsSL https://raw.githubusercontent.com/sthalatech/scripts/refs/heads/main/runpod_setup.sh | bash
 ```
 
 **Or using wget:**
 ```bash
-wget -qO- https://raw.githubusercontent.com/sthalatech/scripts/main/runpod_setup.sh | bash
+wget -qO- https://raw.githubusercontent.com/sthalatech/scripts/refs/heads/main/runpod_setup.sh | bash
 ```
 
 That's it! The script will:
