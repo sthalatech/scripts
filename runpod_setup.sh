@@ -8,8 +8,8 @@ set -e
 # CONFIGURATION PARAMETERS
 # ============================================
 #Changed models
-export MODEL_NAME="google/gemma-3-12b-it"
-export MODEL_PATH="/workspace/models/gemma-3-12b-it"
+export MODEL_NAME="NousResearch/Hermes-3-Llama-3.1-8B"
+export MODEL_PATH="/workspace/models/Hermes-3-Llama-3.1-8B"
 export VLLM_PORT=8000
 export GO_VERSION="1.23.4"
 
@@ -23,7 +23,7 @@ echo "===================================="
 # ============================================
 echo "📦 Installing system packages..."
 apt-get update -qq 2>/dev/null
-apt-get install -y -qq nano lsof curl wget jq git python3-venv build-essential pip supervisor 2>/dev/null
+apt-get install -y -qq nano lsof curl wget jq git python3-venv build-essential pip supervisor huggingface-hub 2>/dev/null
 echo "✅ System packages installed"
 
 # ============================================
@@ -143,7 +143,7 @@ cat > /workspace/supervisor/conf.d/vllm.conf << VLLMEOF
 [program:vllm]
 command=/workspace/venv/bin/vllm serve $MODEL_PATH --host 127.0.0.1 --port 11434 \
         --dtype auto --enable-auto-tool-choice --tool-call-parser hermes \
-        --max-model-len 8192
+        --max-model-len 16384
 directory=/workspace
 environment=HF_HOME="/workspace/.cache/huggingface",CUDA_VISIBLE_DEVICES="0"
 autostart=true
