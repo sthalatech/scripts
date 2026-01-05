@@ -1,5 +1,6 @@
 #!/bin/bash
 # RunPod vLLM Setup Script
+
 # https://github.com/sthalatech/scripts/runpod_setup.sh
 set -e
 
