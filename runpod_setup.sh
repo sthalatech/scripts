@@ -7,8 +7,8 @@ set -e
 # ============================================
 # CONFIGURATION PARAMETERS
 # ============================================
-export MODEL_NAME="mistralai/Ministral-8B-Instruct-2410"
-export MODEL_PATH="/workspace/models/Ministral-8B-Instruct-2410"
+export MODEL_NAME="MaziyarPanahi/Ministral-8B-Instruct-2410-AWQ"
+export MODEL_PATH="/workspace/models/Ministral-8B-Instruct-2410-AWQ"
 export VLLM_PORT=8000
 export GO_VERSION="1.23.4"
 
