@@ -7,8 +7,8 @@ set -e
 # ============================================
 # CONFIGURATION PARAMETERS
 # ============================================
-export MODEL_NAME="MaziyarPanahi/Ministral-8B-Instruct-2410-AWQ"
-export MODEL_PATH="/workspace/models/Ministral-8B-Instruct-2410-AWQ"
+export MODEL_NAME="google/gemma-2-9b-it"
+export MODEL_PATH="/workspace/models/gemma-2-9b-it"
 export VLLM_PORT=8000
 export GO_VERSION="1.23.4"
 
@@ -142,7 +142,7 @@ cat > /workspace/supervisor/conf.d/vllm.conf << VLLMEOF
 [program:vllm]
 command=/workspace/venv/bin/vllm serve $MODEL_PATH --host 127.0.0.1 --port 11434 \
         --dtype auto --enable-auto-tool-choice --tool-call-parser hermes \
-        --quantization awq --max-model-len 32768
+        --max-model-len 8192
 directory=/workspace
 environment=HF_HOME="/workspace/.cache/huggingface",CUDA_VISIBLE_DEVICES="0"
 autostart=true
