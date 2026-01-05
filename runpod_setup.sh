@@ -7,8 +7,8 @@ set -e
 # ============================================
 # CONFIGURATION PARAMETERS
 # ============================================
-export MODEL_NAME="Qwen/Qwen2.5-14B-Instruct-AWQ"
-export MODEL_PATH="/workspace/models/Qwen2.5-14B-Instruct-AWQ"
+export MODEL_NAME="mistralai/Ministral-8B-Instruct-2410"
+export MODEL_PATH="/workspace/models/Ministral-8B-Instruct-2410"
 export VLLM_PORT=8000
 export GO_VERSION="1.23.4"
 
